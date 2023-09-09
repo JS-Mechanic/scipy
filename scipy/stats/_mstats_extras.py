@@ -15,7 +15,7 @@ __all__ = ['compare_medians_ms',
 
 
 import numpy as np
-from numpy import float_, int_, ndarray
+from numpy import float64, int_, ndarray
 
 import numpy.ma as ma
 from numpy.ma import MaskedArray
@@ -62,7 +62,7 @@ def hdquantiles(data, prob=list([.25,.5,.75]), axis=None, var=False,):
         # Don't use length here, in case we have a numpy scalar
         n = xsorted.size
 
-        hd = np.empty((2,len(prob)), float_)
+        hd = np.empty((2,len(prob)), float64)
         if n < 2:
             hd.flat = np.nan
             if var:
@@ -86,7 +86,7 @@ def hdquantiles(data, prob=list([.25,.5,.75]), axis=None, var=False,):
             return hd
         return hd[0]
     # Initialization & checks
-    data = ma.array(data, copy=False, dtype=float_)
+    data = ma.array(data, copy=False, dtype=float64)
     p = np.array(prob, copy=False, ndmin=1)
     # Computes quantiles along axis (or globally)
     if (axis is None) or (data.ndim == 1):
@@ -155,7 +155,7 @@ def hdquantiles_sd(data, prob=list([.25,.5,.75]), axis=None):
         xsorted = np.sort(data.compressed())
         n = len(xsorted)
 
-        hdsd = np.empty(len(prob), float_)
+        hdsd = np.empty(len(prob), float64)
         if n < 2:
             hdsd.flat = np.nan
 
@@ -163,17 +163,19 @@ def hdquantiles_sd(data, prob=list([.25,.5,.75]), axis=None):
         betacdf = beta.cdf
 
         for (i,p) in enumerate(prob):
-            _w = betacdf(vv, (n+1)*p, (n+1)*(1-p))
+            _w = betacdf(vv, n*p, n*(1-p))
             w = _w[1:] - _w[:-1]
-            mx_ = np.fromiter([w[:k] @ xsorted[:k] + w[k:] @ xsorted[k+1:]
-                               for k in range(n)], dtype=float_)
-            # mx_var = np.array(mx_.var(), copy=False, ndmin=1) * n / (n - 1)
-            # hdsd[i] = (n - 1) * np.sqrt(mx_var / n)
+            # cumulative sum of weights and data points if
+            # ith point is left out for jackknife
+            mx_ = np.zeros_like(xsorted)
+            mx_[1:] = np.cumsum(w * xsorted[:-1])
+            # similar but from the right
+            mx_[:-1] += np.cumsum(w[::-1] * xsorted[:0:-1])[::-1]
             hdsd[i] = np.sqrt(mx_.var() * (n - 1))
         return hdsd
 
     # Initialization & checks
-    data = ma.array(data, copy=False, dtype=float_)
+    data = ma.array(data, copy=False, dtype=float64)
     p = np.array(prob, copy=False, ndmin=1)
     # Computes quantiles along axis (or globally)
     if (axis is None):
@@ -260,8 +262,8 @@ def mjci(data, prob=[0.25,0.5,0.75], axis=None):
         prob = (np.array(p) * n + 0.5).astype(int_)
         betacdf = beta.cdf
 
-        mj = np.empty(len(prob), float_)
-        x = np.arange(1,n+1, dtype=float_) / n
+        mj = np.empty(len(prob), float64)
+        x = np.arange(1,n+1, dtype=float64) / n
         y = x - 1./n
         for (i,m) in enumerate(prob):
             W = betacdf(x,m-1,n-m) - betacdf(y,m-1,n-m)
@@ -392,6 +394,30 @@ def compare_medians_ms(group_1, group_2, axis=None):
         If `axis` is None, then returns a float, otherwise returns a 1-D
         ndarray of floats with a length equal to the length of `group_1`
         along `axis`.
+
+    Examples
+    --------
+
+    >>> from scipy import stats
+    >>> a = [1, 2, 3, 4, 5, 6, 7]
+    >>> b = [8, 9, 10, 11, 12, 13, 14]
+    >>> stats.mstats.compare_medians_ms(a, b, axis=None)
+    1.0693225866553746e-05
+
+    The function is vectorized to compute along a given axis.
+
+    >>> import numpy as np
+    >>> rng = np.random.default_rng()
+    >>> x = rng.random(size=(3, 7))
+    >>> y = rng.random(size=(3, 8))
+    >>> stats.mstats.compare_medians_ms(x, y, axis=1)
+    array([0.36908985, 0.36092538, 0.2765313 ])
+
+    References
+    ----------
+    .. [1] McKean, Joseph W., and Ronald M. Schrader. "A comparison of methods
+       for studentizing the sample median." Communications in
+       Statistics-Simulation and Computation 13.6 (1984): 751-773.
 
     """
     (med_1, med_2) = (ma.median(group_1,axis=axis), ma.median(group_2,axis=axis))

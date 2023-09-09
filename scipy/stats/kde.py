@@ -2,11 +2,15 @@
 # Use the `scipy.stats` namespace for importing the functions
 # included below.
 
-import warnings
-from . import _kde
+from scipy._lib.deprecation import _sub_module_deprecation
 
 
-__all__ = ['gaussian_kde']  # noqa: F822
+__all__ = [  # noqa: F822
+    'gaussian_kde', 'linalg', 'logsumexp', 'check_random_state',
+    'atleast_2d', 'reshape', 'newaxis', 'exp', 'ravel', 'power',
+    'atleast_1d', 'squeeze', 'sum', 'transpose', 'cov',
+    'gaussian_kernel_estimate'
+]
 
 
 def __dir__():
@@ -14,13 +18,6 @@ def __dir__():
 
 
 def __getattr__(name):
-    if name not in __all__:
-        raise AttributeError(
-            "scipy.stats.kde is deprecated and has no attribute "
-            f"{name}. Try looking in scipy.stats instead.")
-
-    warnings.warn(f"Please use `{name}` from the `scipy.stats` namespace, "
-                  "the `scipy.stats.kde` namespace is deprecated.",
-                  category=DeprecationWarning, stacklevel=2)
-
-    return getattr(_kde, name)
+    return _sub_module_deprecation(sub_package="stats", module="kde",
+                                   private_modules=["_kde"], all=__all__,
+                                   attribute=name)
